@@ -1,0 +1,26 @@
+/**:
+  ros__parameters:
+    # YOLO 权重路径。留空时节点会自动尝试使用包内 share/uav_perception/best.pt
+    model_path: ""
+
+    # 检测置信度阈值。越高越严格，漏检概率也可能增加
+    conf_thres: 0.25
+
+    # 输入图像话题（sensor_msgs/Image）
+    input_image_topic: "/camera/image_raw"
+
+    # 输出标注图像话题（sensor_msgs/Image）
+    output_image_topic: "/perception/image_annotated"
+
+    # 输出检测 JSON 话题（std_msgs/String）
+    detections_topic: "/perception/detections_json"
+
+    # 锁定目标输入话题（std_msgs/String）
+    # 设为 "" 可禁用锁定 overlay 功能
+    lock_target_topic: "/perception/lock_target"
+
+    # 锁定框颜色（BGR）
+    lock_color: [255, 0, 0]
+
+    # 锁定框与箭头线宽
+    lock_thickness: 3

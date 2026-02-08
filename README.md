@@ -95,7 +95,7 @@ source install/setup.bash
 - `lock_thickness`：锁定框/箭头线宽，默认 `3`。
 
 ## 8. 运行方式
-### 8.1 直接运行节点
+### 8.1 直接运行节点（不推荐）
 ```bash
 ros2 run uav_perception yolo_detector
 ```

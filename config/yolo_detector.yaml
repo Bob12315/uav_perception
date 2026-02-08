@@ -1,13 +1,13 @@
 /**:
   ros__parameters:
     # YOLO 权重路径。留空时节点会自动尝试使用包内 share/uav_perception/best.pt
-    model_path: ""
+    model_path: "/home/level6/ros2_ws/src/uav_perception/best.pt"
 
     # 检测置信度阈值。越高越严格，漏检概率也可能增加
     conf_thres: 0.25
 
     # 输入图像话题（sensor_msgs/Image）
-    input_image_topic: "/camera/image_raw"
+    input_image_topic: "/world/iris_runway/model/iris_with_gimbal/model/gimbal/link/pitch_link/sensor/camera/image"
 
     # 输出标注图像话题（sensor_msgs/Image）
     output_image_topic: "/perception/image_annotated"

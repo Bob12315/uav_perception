@@ -10,6 +10,7 @@
 - 使用 Ultralytics YOLO 执行目标检测
 - 发布标注图像（框、类别、置信度）
 - 发布检测 JSON（`std_msgs/String`）
+- 发布融合状态 JSON（`std_msgs/String`，含 target/gimbal/uav）
 - 支持锁定目标 overlay（LOCKED 框、中心十字、箭头、误差文本）
 - 每秒打印输入流状态（fps、分辨率、编码）
 
@@ -91,6 +92,9 @@ source install/setup.bash
 - `detections_topic`：JSON 输出话题，默认 `/perception/detections_json`。
 - `lock_target_topic`：锁定输入话题，默认 `/perception/lock_target`。
   - 设为 `""` 可禁用锁定 overlay。
+- `fusion_topic`：融合状态 JSON 输出，默认 `/perception/fusion_state_json`。
+- `gimbal_angle_topic`：云台角输入，默认 `/uav/gimbal/angle`。
+- `uav_odom_topic`：无人机姿态/高度输入，默认 `/uav/odom`。
 - `lock_color`：锁定框颜色（BGR），默认 `[255, 0, 0]`。
 - `lock_thickness`：锁定框/箭头线宽，默认 `3`。
 
@@ -118,6 +122,10 @@ ros2 launch uav_perception yolo_detector.launch.py \
 - `lock_target_topic`（默认 `/perception/lock_target`）
   - 类型：`std_msgs/String`
   - 内容：JSON 字符串（见第 11 节）
+- `gimbal_angle_topic`（默认 `/uav/gimbal/angle`）
+  - 类型：`geometry_msgs/Vector3`
+- `uav_odom_topic`（默认 `/uav/odom`）
+  - 类型：`nav_msgs/Odometry`
 
 ### 9.2 发布话题
 - `output_image_topic`（默认 `/perception/image_annotated`）
@@ -125,6 +133,9 @@ ros2 launch uav_perception yolo_detector.launch.py \
 - `detections_topic`（默认 `/perception/detections_json`）
   - 类型：`std_msgs/String`
   - 内容：JSON 字符串（见第 10 节）
+- `fusion_topic`（默认 `/perception/fusion_state_json`）
+  - 类型：`std_msgs/String`
+  - 内容：JSON 字符串（见第 10.1 节）
 
 ## 10. 检测 JSON 输出格式
 `detections_topic` 的 `data` 示例：
@@ -162,6 +173,27 @@ ros2 launch uav_perception yolo_detector.launch.py \
 - `xyxy`：边框坐标 `[x1, y1, x2, y2]`
 - `cx` / `cy`：边框中心
 - `area`：边框面积（像素平方）
+
+## 10.1 融合状态 JSON 输出格式
+`fusion_topic` 的 `data` 示例：
+
+```json
+{
+  "stamp_sec": 1700000000.123456,
+  "image": {"w": 640, "h": 480},
+  "target": {
+    "locked": true,
+    "cls_name": "bucket",
+    "conf": 0.91,
+    "xyxy": [120, 80, 240, 220],
+    "cx": 180,
+    "cy": 150,
+    "area": 16800.0
+  },
+  "gimbal": {"pitch_deg": -37.2, "roll_deg": 0.1, "yaw_deg": 5.0},
+  "uav": {"roll_deg": 1.5, "pitch_deg": -0.8, "yaw_deg": 92.0, "alt_rel_m": 12.3}
+}
+```
 
 ## 11. 锁定输入格式
 `lock_target_topic` 需要 `std_msgs/String`，`data` 为 JSON，例如：

@@ -19,6 +19,16 @@
     # 设为 "" 可禁用锁定 overlay 功能
     lock_target_topic: "/perception/lock_target"
 
+    # 输出融合状态 JSON（std_msgs/String）
+    # 内容含目标锁定、云台角度、无人机姿态与相对高度
+    fusion_topic: "/perception/fusion_state_json"
+
+    # 云台角度输入（geometry_msgs/Vector3）
+    gimbal_angle_topic: "/uav/gimbal/angle"
+
+    # 无人机状态输入（nav_msgs/Odometry）
+    uav_odom_topic: "/uav/odom"
+
     # 锁定框颜色（BGR）
     lock_color: [255, 0, 0]
 

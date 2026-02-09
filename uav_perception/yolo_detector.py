@@ -10,8 +10,6 @@ import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from geometry_msgs.msg import Vector3
-from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from ultralytics import YOLO
@@ -25,21 +23,6 @@ def _default_model_path() -> str:
     except PackageNotFoundError:
         pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         return os.path.join(pkg_root, 'best.pt')
-
-
-def _quat_to_rpy_deg(qx: float, qy: float, qz: float, qw: float):
-    sinr_cosp = 2.0 * (qw * qx + qy * qz)
-    cosr_cosp = 1.0 - 2.0 * (qx * qx + qy * qy)
-    roll = np.arctan2(sinr_cosp, cosr_cosp)
-
-    sinp = 2.0 * (qw * qy - qz * qx)
-    sinp = np.clip(sinp, -1.0, 1.0)
-    pitch = np.arcsin(sinp)
-
-    siny_cosp = 2.0 * (qw * qz + qx * qy)
-    cosy_cosp = 1.0 - 2.0 * (qy * qy + qz * qz)
-    yaw = np.arctan2(siny_cosp, cosy_cosp)
-    return float(np.degrees(roll)), float(np.degrees(pitch)), float(np.degrees(yaw))
 
 
 class YoloDetector(Node):
@@ -78,15 +61,6 @@ class YoloDetector(Node):
         lock_target_topic = str(
             self.declare_parameter('lock_target_topic', '/perception/lock_target').value
         )
-        fusion_topic = str(
-            self.declare_parameter('fusion_topic', '/perception/fusion_state_json').value
-        )
-        gimbal_angle_topic = str(
-            self.declare_parameter('gimbal_angle_topic', '/uav/gimbal/angle').value
-        )
-        uav_odom_topic = str(
-            self.declare_parameter('uav_odom_topic', '/uav/odom').value
-        )
         lock_color_param = self.declare_parameter('lock_color', [255, 0, 0]).value
         self._lock_thickness = int(self.declare_parameter('lock_thickness', 3).value)
         self._lock_color = (255, 0, 0)
@@ -106,13 +80,6 @@ class YoloDetector(Node):
         self._lock_cy = 0.0
         self._lock_score = 0.0
         self._lock_cls_name = ''
-        self._gimbal_pitch_deg = 0.0
-        self._gimbal_roll_deg = 0.0
-        self._gimbal_yaw_deg = 0.0
-        self._uav_roll_deg = 0.0
-        self._uav_pitch_deg = 0.0
-        self._uav_yaw_deg = 0.0
-        self._uav_alt_rel_m = 0.0
 
         if not os.path.isfile(model_path):
             self.get_logger().error(f'model_path not found: {model_path}')
@@ -135,24 +102,11 @@ class YoloDetector(Node):
         )
         self._pub = self.create_publisher(Image, output_image_topic, qos)
         self._json_pub = self.create_publisher(String, detections_topic, reliable_qos)
-        self._fusion_pub = self.create_publisher(String, fusion_topic, reliable_qos)
         self._sub = self.create_subscription(
             Image,
             input_image_topic,
             self._on_image,
             qos,
-        )
-        self._gimbal_sub = self.create_subscription(
-            Vector3,
-            gimbal_angle_topic,
-            self._on_gimbal_angle,
-            reliable_qos,
-        )
-        self._uav_odom_sub = self.create_subscription(
-            Odometry,
-            uav_odom_topic,
-            self._on_uav_odom,
-            reliable_qos,
         )
         self._lock_sub = None
         if lock_target_topic:
@@ -166,9 +120,7 @@ class YoloDetector(Node):
         self.get_logger().info(
             f'config: model={model_path}, conf_thres={self._conf_thres}, '
             f'input={input_image_topic}, out_image={output_image_topic}, '
-            f'out_json={detections_topic}, fusion_json={fusion_topic}, '
-            f'lock_topic={lock_target_topic or "(disabled)"}, '
-            f'gimbal_topic={gimbal_angle_topic}, uav_odom_topic={uav_odom_topic}'
+            f'out_json={detections_topic}, lock_topic={lock_target_topic or "(disabled)"}'
         )
 
     def _on_image(self, msg: Image) -> None:
@@ -252,24 +204,6 @@ class YoloDetector(Node):
         # ensure_ascii=True 让输出稳定为 ASCII，日志与跨语言链路更稳妥。
         self._json_pub.publish(String(data=json.dumps(payload, ensure_ascii=True)))
 
-        fusion_payload = {
-            'stamp_sec': stamp,
-            'image': {'w': int(msg.width), 'h': int(msg.height)},
-            'target': self._build_target_payload(),
-            'gimbal': {
-                'pitch_deg': self._gimbal_pitch_deg,
-                'roll_deg': self._gimbal_roll_deg,
-                'yaw_deg': self._gimbal_yaw_deg,
-            },
-            'uav': {
-                'roll_deg': self._uav_roll_deg,
-                'pitch_deg': self._uav_pitch_deg,
-                'yaw_deg': self._uav_yaw_deg,
-                'alt_rel_m': self._uav_alt_rel_m,
-            },
-        }
-        self._fusion_pub.publish(String(data=json.dumps(fusion_payload, ensure_ascii=True)))
-
     def _on_lock_target(self, msg: String) -> None:
         try:
             payload = json.loads(msg.data)
@@ -302,42 +236,6 @@ class YoloDetector(Node):
             self._lock_active = True
         except Exception:
             self._lock_active = False
-
-    def _on_gimbal_angle(self, msg: Vector3) -> None:
-        self._gimbal_pitch_deg = float(msg.x)
-        self._gimbal_roll_deg = float(msg.y)
-        self._gimbal_yaw_deg = float(msg.z)
-
-    def _on_uav_odom(self, msg: Odometry) -> None:
-        q = msg.pose.pose.orientation
-        roll_deg, pitch_deg, yaw_deg = _quat_to_rpy_deg(q.x, q.y, q.z, q.w)
-        self._uav_roll_deg = roll_deg
-        self._uav_pitch_deg = pitch_deg
-        self._uav_yaw_deg = yaw_deg
-        self._uav_alt_rel_m = float(msg.pose.pose.position.z)
-
-    def _build_target_payload(self) -> dict:
-        if not self._lock_active:
-            return {
-                'locked': False,
-                'cls_name': '',
-                'conf': 0.0,
-                'xyxy': [0.0, 0.0, 0.0, 0.0],
-                'cx': 0.0,
-                'cy': 0.0,
-                'area': 0.0,
-            }
-        x1, y1, x2, y2 = self._lock_xyxy
-        area = max(0.0, (x2 - x1)) * max(0.0, (y2 - y1))
-        return {
-            'locked': True,
-            'cls_name': self._lock_cls_name,
-            'conf': self._lock_score,
-            'xyxy': [x1, y1, x2, y2],
-            'cx': self._lock_cx,
-            'cy': self._lock_cy,
-            'area': area,
-        }
 
     def _draw_lock_overlay(self, vis: np.ndarray) -> None:
         height, width = vis.shape[:2]

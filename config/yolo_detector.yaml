@@ -1,7 +1,10 @@
 /**:
   ros__parameters:
-    # YOLO 权重路径。留空时节点会自动尝试使用包内 share/uav_perception/best.pt
-    model_path: "/home/level6/ros2_ws/src/uav_perception/best.pt"
+    # YOLO 权重路径。留空时节点会自动尝试:
+    # 1) share/uav_perception/gazebo_yolo.pt
+    # 2) share/uav_perception/best.pt
+    # 3) 源码目录下同名文件
+    model_path: "/home/level6/ros2_ws/src/uav_perception/gazebo_yolo.pt"
 
     # 检测置信度阈值。越高越严格，漏检概率也可能增加
     conf_thres: 0.25

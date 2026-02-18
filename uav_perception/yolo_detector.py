@@ -15,14 +15,53 @@ from std_msgs.msg import String
 from ultralytics import YOLO
 
 
-def _default_model_path() -> str:
-    """优先使用已安装包的 share 目录；源码运行时回退到仓库路径。"""
+def _candidate_model_paths():
+    paths = []
     try:
         share_dir = get_package_share_directory('uav_perception')
-        return os.path.join(share_dir, 'best.pt')
+        paths.extend(
+            [
+                os.path.join(share_dir, 'gazebo_yolo.pt'),
+                os.path.join(share_dir, 'best.pt'),
+            ]
+        )
     except PackageNotFoundError:
-        pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        return os.path.join(pkg_root, 'best.pt')
+        pass
+
+    pkg_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    paths.extend(
+        [
+            os.path.join(pkg_root, 'gazebo_yolo.pt'),
+            os.path.join(pkg_root, 'best.pt'),
+        ]
+    )
+
+    # 去重并保持顺序，便于日志输出可读。
+    return list(dict.fromkeys(paths))
+
+
+def _default_model_path() -> str:
+    """返回首个存在的默认模型路径；若都不存在则返回首个候选路径。"""
+    candidates = _candidate_model_paths()
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return candidates[0] if candidates else ''
+
+
+def _resolve_model_path(configured_path: str) -> str:
+    candidates = []
+    cfg = configured_path.strip()
+    if cfg:
+        candidates.append(os.path.abspath(os.path.expanduser(cfg)))
+    candidates.extend(_candidate_model_paths())
+
+    # 去重并保持顺序。
+    candidates = list(dict.fromkeys(candidates))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return ''
 
 
 class YoloDetector(Node):
@@ -45,9 +84,10 @@ class YoloDetector(Node):
         # 通过参数配置模型路径与置信度阈值，便于 launch 文件覆盖:
         # - model_path: YOLO 权重文件路径
         # - conf_thres: 最低置信度阈值（低于阈值的检测会被过滤）
-        model_path = str(self.declare_parameter('model_path', _default_model_path()).value).strip()
-        if not model_path:
-            model_path = _default_model_path()
+        configured_model_path = str(
+            self.declare_parameter('model_path', _default_model_path()).value
+        )
+        model_path = _resolve_model_path(configured_model_path)
         self._conf_thres = float(self.declare_parameter('conf_thres', 0.25).value)
         input_image_topic = str(
             self.declare_parameter('input_image_topic', '/camera/image_raw').value
@@ -81,9 +121,22 @@ class YoloDetector(Node):
         self._lock_score = 0.0
         self._lock_cls_name = ''
 
-        if not os.path.isfile(model_path):
-            self.get_logger().error(f'model_path not found: {model_path}')
+        if not model_path:
+            tried = []
+            if configured_model_path.strip():
+                tried.append(os.path.abspath(os.path.expanduser(configured_model_path.strip())))
+            tried.extend(_candidate_model_paths())
+            tried = list(dict.fromkeys(tried))
+            self.get_logger().error(
+                'model_path not found. tried: ' + ', '.join(tried)
+            )
             raise SystemExit(1)
+        if configured_model_path.strip() and os.path.abspath(
+            os.path.expanduser(configured_model_path.strip())
+        ) != model_path:
+            self.get_logger().warning(
+                f'configured model_path unavailable, fallback to: {model_path}'
+            )
         self.model = YOLO(model_path)
 
         # 图像链路优先实时性，采用 BEST_EFFORT。

@@ -11,7 +11,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/yolo_detector.launch.py']),
         ('share/' + package_name + '/config', ['config/yolo_detector.yaml']),
-        ('share/' + package_name, ['best.pt']),
+        ('share/' + package_name, ['gazebo_yolo.pt']),
     ],
     install_requires=['setuptools', 'numpy', 'opencv-python', 'ultralytics'],
     zip_safe=True,

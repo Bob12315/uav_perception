@@ -25,7 +25,7 @@ uav_perception/
 ├── uav_perception/
 │   ├── __init__.py
 │   └── yolo_detector.py            # 主节点实现
-├── best.pt                         # 默认模型权重（可替换）
+├── gazebo_yolo.pt                  # 默认模型权重（可替换）
 ├── package.xml
 ├── setup.cfg
 ├── setup.py
@@ -84,7 +84,10 @@ source install/setup.bash
 
 关键参数：
 - `model_path`：YOLO 权重路径。
-  - 为空时，节点会尝试使用包内默认 `best.pt`。
+  - 为空或无效时，节点会按顺序尝试：
+    - `share/uav_perception/gazebo_yolo.pt`
+    - `share/uav_perception/best.pt`
+    - 源码目录下同名文件
 - `conf_thres`：检测置信度阈值，默认 `0.25`。
 - `input_image_topic`：输入图像话题，默认 `/camera/image_raw`。
 - `output_image_topic`：标注图像输出话题，默认 `/perception/image_annotated`。
@@ -201,7 +204,7 @@ ros2 launch uav_perception yolo_detector.launch.py \
 
 处理：
 - 在 `config/yolo_detector.yaml` 设置正确 `model_path`
-- 或将模型放到包内并命名为 `best.pt`
+- 或将模型放到包内并命名为 `gazebo_yolo.pt`（也兼容 `best.pt`）
 
 ### 14.2 有图像但没有检测框
 可能原因：

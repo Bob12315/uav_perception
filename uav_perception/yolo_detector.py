@@ -120,6 +120,12 @@ class YoloDetector(Node):
         self._lock_cy = 0.0
         self._lock_score = 0.0
         self._lock_cls_name = ''
+        self._lock_status = 'pending'
+        self._lock_done_count = 0
+        self._lock_target_drop_count = 0
+        self._lock_task_done = False
+        self._lock_ex = 0.0
+        self._lock_ey = 0.0
 
         if not model_path:
             tried = []
@@ -286,6 +292,12 @@ class YoloDetector(Node):
             self._lock_cy = float(cy)
             self._lock_score = float(payload.get('conf', payload.get('score', 0.0)))
             self._lock_cls_name = str(payload.get('cls_name', ''))
+            self._lock_status = str(payload.get('status', 'pending'))
+            self._lock_done_count = int(payload.get('done_count', 0))
+            self._lock_target_drop_count = int(payload.get('target_drop_count', 0))
+            self._lock_task_done = bool(payload.get('task_done', False))
+            self._lock_ex = float(payload.get('ex', 0.0))
+            self._lock_ey = float(payload.get('ey', 0.0))
             self._lock_active = True
         except Exception:
             self._lock_active = False
@@ -297,9 +309,10 @@ class YoloDetector(Node):
         ex = (self._lock_cx - half_w) / half_w
         ey = (self._lock_cy - half_h) / half_h
         locked_text = 'true' if self._lock_active else 'false'
+        status_text = self._lock_status
         cv2.putText(
             vis,
-            f'ex={ex:.3f}, ey={ey:.3f}, locked={locked_text}',
+            f'ex={ex:.3f}, ey={ey:.3f}, locked={locked_text}, status={status_text}',
             (10, 24),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
@@ -314,7 +327,8 @@ class YoloDetector(Node):
         center = (int(self._lock_cx), int(self._lock_cy))
         image_center = (int(width / 2), int(height / 2))
         thickness = max(1, int(self._lock_thickness))
-        color = self._lock_color
+        # 已完成目标用不同颜色强调
+        color = (255, 0, 255) if self._lock_status == 'done' else self._lock_color
 
         cv2.rectangle(vis, p1, p2, color, thickness)
         cv2.drawMarker(
@@ -328,7 +342,7 @@ class YoloDetector(Node):
         )
         cv2.putText(
             vis,
-            'LOCKED',
+            'LOCKED' if self._lock_status != 'done' else 'DONE',
             (p1[0], max(0, p1[1] - 10)),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.7,
@@ -356,6 +370,29 @@ class YoloDetector(Node):
             max(1, thickness - 1),
             cv2.LINE_AA,
         )
+        if self._lock_target_drop_count > 0:
+            done_text = f'done={self._lock_done_count}/{self._lock_target_drop_count}'
+            cv2.putText(
+                vis,
+                done_text,
+                (10, min(height - 10, 48)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.65,
+                (0, 200, 255),
+                2,
+                cv2.LINE_AA,
+            )
+        if self._lock_task_done:
+            cv2.putText(
+                vis,
+                'TASK DONE',
+                (10, min(height - 10, 72)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 0),
+                2,
+                cv2.LINE_AA,
+            )
 
     def _ros_to_bgr(self, msg: Image):
         """将 ROS Image 解包为 OpenCV BGR ndarray；失败返回 None。
